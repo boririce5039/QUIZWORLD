@@ -23,7 +23,7 @@ const CONFIG = {
     messagingSenderId: "717722843090",
     appId: "1:717722843090:web:75c956c576ad4b0860fa0b"
   },
-  teacherPassword: "2014"   // 선생님 화면 비밀번호 (꼭 바꾸세요)
+  teacherPassword: "1234"   // 선생님 화면 비밀번호 (꼭 바꾸세요)
 };
 </script>
 <style>
@@ -395,6 +395,7 @@ table.res th{background:var(--ink);color:#fff;font-family:'Jua';font-weight:400}
 
 <script>
 /* ================= 기본 도구 ================= */
+window.addEventListener('error',e=>{const w=document.getElementById('cfgWarn');if(w&&document.getElementById('home').classList.contains('on')){w.hidden=false;w.textContent='⚠️ 오류가 났어요: '+(e.message||e)+' (이 문장을 알려 주시면 고칠 수 있어요)';}});
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const EMOJI="'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -412,12 +413,24 @@ function downloadText(name,text,type){const b=new Blob([text],{type});const a=do
 
 /* ================= Firebase ================= */
 let db=null, serverOffset=0;
-const FB_OK = typeof firebase!=='undefined' && CONFIG.firebase.apiKey && !CONFIG.firebase.apiKey.includes('여기') && CONFIG.firebase.databaseURL;
-if(FB_OK){firebase.initializeApp(CONFIG.firebase);db=firebase.database();db.ref('.info/serverTimeOffset').on('value',s=>serverOffset=s.val()||0);}
-else $('#cfgWarn').hidden=false;
+const CFG=(typeof CONFIG!=='undefined'&&CONFIG&&CONFIG.firebase)?CONFIG:null;
+let FB_ERR='';
+(function initFB(){
+  if(!CFG){FB_ERR='index.html 맨 위 CONFIG 부분에 문법 오류가 있어요. 따옴표(")와 쉼표(,)가 빠지지 않았는지, firebaseConfig 전체가 아니라 값만 붙여넣었는지 확인해 주세요.';return;}
+  const f=CFG.firebase;
+  if(!f.apiKey||String(f.apiKey).includes('여기')||!f.databaseURL){FB_ERR='아직 Firebase 설정이 비어 있어요. 설치 안내 4단계를 따라 index.html 맨 위 CONFIG를 채워 주세요. (databaseURL도 꼭 필요해요)';return;}
+  if(typeof firebase==='undefined'){FB_ERR='Firebase 프로그램을 불러오지 못했어요. 인터넷 연결을 확인하고, 파일을 GitHub 주소(https://...github.io/...)로 열어 주세요. 학교 인터넷이면 gstatic.com이 막혀 있을 수 있어요.';return;}
+  try{
+    f.databaseURL=String(f.databaseURL).trim().replace(/\/+$/,'');
+    firebase.initializeApp(f);db=firebase.database();
+    db.ref('.info/serverTimeOffset').on('value',s=>serverOffset=s.val()||0);
+  }catch(err){db=null;FB_ERR='Firebase 설정값이 올바르지 않아요. databaseURL이 https://로 시작하는 주소인지 확인해 주세요. ('+err.message+')';}
+})();
+function showCfgWarn(){const w=$('#cfgWarn');w.hidden=false;w.innerHTML='⚠️ '+esc(FB_ERR);w.animate&&w.animate([{transform:'scale(1)'},{transform:'scale(1.04)'},{transform:'scale(1)'}],{duration:350});}
+if(FB_ERR)showCfgWarn();
 const now=()=>Date.now()+serverOffset;
 const INC=n=>firebase.database.ServerValue.increment(n);
-function needFB(){if(!db){toast('먼저 Firebase 설정을 해 주세요');return false;}return true;}
+function needFB(){if(!db){showCfgWarn();toast('위의 안내를 확인해 주세요');return false;}return true;}
 
 /* ================= 데이터 정의 ================= */
 const AVATARS=['🐶','🐱','🐰','🐻','🐼','🦊','🐸','🐯','🐧','🐨','🦁','🐹','🐵','🐙','🦄','🐥'];
@@ -553,7 +566,7 @@ async function joinRoom(){
 
 /* ================= 교사: 로그인 · 대시보드 ================= */
 $('#tGo').onclick=tLogin;$('#tPw').addEventListener('keydown',e=>{if(e.key==='Enter')tLogin();});
-function tLogin(){if($('#tPw').value!==CONFIG.teacherPassword)return toast('비밀번호가 맞지 않아요');$('#tPw').value='';openDash();}
+function tLogin(){if($('#tPw').value!==String(CFG.teacherPassword||'1234'))return toast('비밀번호가 맞지 않아요');$('#tPw').value='';openDash();}
 let QUIZZES={};
 async function loadRwCfg(){try{setRwCfg((await db.ref('settings/rewards').get()).val());}catch(e){console.error(e);}}
 async function openDash(){show('tdash');await loadRwCfg();await loadQuizzes();loadRooms();}
